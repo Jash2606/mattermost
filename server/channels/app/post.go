@@ -2809,3 +2809,16 @@ func (a *App) SendTestMessage(c request.CTX, userID string) (*model.Post, *model
 
 	return post, nil
 }
+
+// Broadcast new post to cluster
+if a.Cluster() != nil {
+    data, jsonErr := json.Marshal(rpost)
+    if jsonErr == nil {
+        msg := &model.ClusterMessage{
+            Event:    model.ClusterEventNewPost,
+            SendType: model.ClusterSendReliable,
+            Data:     data,
+        }
+        a.Cluster().SendClusterMessage(msg)
+    }
+}

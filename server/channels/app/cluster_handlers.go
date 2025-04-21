@@ -11,6 +11,55 @@ import (
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
+func (s *Server) clusterUserPresenceHandler(msg *model.ClusterMessage) {
+    var status model.Status
+    if jsonErr := json.Unmarshal(msg.Data, &status); jsonErr != nil {
+        s.Log().Warn("Failed to decode user status from JSON", mlog.Err(jsonErr))
+        return
+    }
+    
+    // Update the status cache
+    s.Channels().statusCache.Set(status.UserId, status)
+    
+    // Broadcast to connected websockets
+    message := model.NewWebSocketEvent(model.WebsocketEventStatusChange, "", "", "", nil, "")
+    message.Add("status", status.Status)
+    message.Add("user_id", status.UserId)
+    s.Publish(message)
+}
+
+func (s *Server) clusterTypingHandler(msg *model.ClusterMessage) {
+    var typingData map[string]interface{}
+    if jsonErr := json.Unmarshal(msg.Data, &typingData); jsonErr != nil {
+        s.Log().Warn("Failed to decode typing data from JSON", mlog.Err(jsonErr))
+        return
+    }
+    
+    // Extract data
+    userID := typingData["user_id"].(string)
+    channelID := typingData["channel_id"].(string)
+    parentID := typingData["parent_id"].(string)
+    
+    // Broadcast typing event to connected websockets
+    event := model.NewWebSocketEvent(model.WebsocketEventTyping, channelID, "", "", nil, "")
+    event.Add("user_id", userID)
+    event.Add("parent_id", parentID)
+    s.Publish(event)
+}
+
+func (s *Server) clusterNewPostHandler(msg *model.ClusterMessage) {
+    var post model.Post
+    if jsonErr := json.Unmarshal(msg.Data, &post); jsonErr != nil {
+        s.Log().Warn("Failed to decode post from JSON", mlog.Err(jsonErr))
+        return
+    }
+    
+    // Broadcast new post to connected websockets
+    message := model.NewWebSocketEvent(model.WebsocketEventPosted, post.ChannelId, "", "", nil, "")
+    message.Add("post", post.ToJson())
+    s.Publish(message)
+}
+
 func (s *Server) clusterInstallPluginHandler(msg *model.ClusterMessage) {
 	var data model.PluginEventData
 	if jsonErr := json.Unmarshal(msg.Data, &data); jsonErr != nil {
@@ -62,6 +111,11 @@ func (s *Server) registerClusterHandlers() {
 	s.platform.RegisterClusterMessageHandler(model.ClusterEventInstallPlugin, s.clusterInstallPluginHandler)
 	s.platform.RegisterClusterMessageHandler(model.ClusterEventRemovePlugin, s.clusterRemovePluginHandler)
 	s.platform.RegisterClusterMessageHandler(model.ClusterEventPluginEvent, s.clusterPluginEventHandler)
+
+	// New handlers for high availability
+    s.platform.RegisterClusterMessageHandler(model.ClusterEventUpdateStatus, s.clusterUserPresenceHandler)
+    s.platform.RegisterClusterMessageHandler(model.ClusterEventTyping, s.clusterTypingHandler)
+    s.platform.RegisterClusterMessageHandler(model.ClusterEventNewPost, s.clusterNewPostHandler)
 
 	s.platform.RegisterClusterHandlers()
 }

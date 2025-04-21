@@ -847,6 +847,10 @@ func (s *Server) Start() error {
 	if err := s.Channels().Start(); err != nil {
 		return errors.Wrap(err, "Unable to start channels")
 	}
+	// Initialize cluster if Redis is enabled
+	if s.Config().RedisSettings.Enable {
+        s.initCluster()
+    }
 
 	if s.joinCluster && s.platform.Cluster() != nil {
 		s.registerClusterHandlers()

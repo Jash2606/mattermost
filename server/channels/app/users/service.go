@@ -57,3 +57,100 @@ func (c *ServiceConfig) validate() error {
 
 	return nil
 }
+
+func (s *UserService) BroadcastStatusChange(userID, status string) {
+    if s.cluster == nil {
+        return
+    }
+    
+    statusModel := model.Status{
+        UserId: userID,
+        Status: status,
+    }
+    
+    data, err := json.Marshal(statusModel)
+    if err != nil {
+        return
+    }
+    
+    msg := &model.ClusterMessage{
+        Event:    model.ClusterEventUpdateStatus,
+        SendType: model.ClusterSendReliable,
+        Data:     data,
+    }
+    
+    s.cluster.SendClusterMessage(msg)
+}
+
+func (s *UserService) SetStatusAway(userID string, manual bool) (*model.Status, *model.AppError) {
+    status, err := s.store.SaveOrUpdate(&model.Status{
+        UserId:         userID,
+        Status:         model.StatusAway,
+        Manual:         manual,
+        LastActivityAt: model.GetMillis(),
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    // Broadcast status change to cluster
+    s.BroadcastStatusChange(userID, model.StatusAway)
+    
+    return status, nil
+}
+
+func (s *UserService) SetStatusOnline(userID string, manual bool) (*model.Status, *model.AppError) {
+    status, err := s.store.SaveOrUpdate(&model.Status{
+        UserId:         userID,
+        Status:         model.StatusOnline,
+        Manual:         manual,
+        LastActivityAt: model.GetMillis(),
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    // Broadcast status change to cluster
+    s.BroadcastStatusChange(userID, model.StatusOnline)
+    
+    return status, nil
+}
+
+func (s *UserService) SetStatusDnd(userID string, manual bool) (*model.Status, *model.AppError) {
+    status, err := s.store.SaveOrUpdate(&model.Status{
+        UserId:         userID,
+        Status:         model.StatusDnd,
+        Manual:         manual,
+        LastActivityAt: model.GetMillis(),
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    // Broadcast status change to cluster
+    s.BroadcastStatusChange(userID, model.StatusDnd)
+    
+    return status, nil
+}
+
+
+func (s *UserService) SetStatusOffline(userID string, manual bool) (*model.Status, *model.AppError) {
+    status, err := s.store.SaveOrUpdate(&model.Status{
+        UserId:         userID,
+        Status:         model.StatusOffline,
+        Manual:         manual,
+        LastActivityAt: model.GetMillis(),
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    // Broadcast status change to cluster
+    s.BroadcastStatusChange(userID, model.StatusOffline)
+    
+    return status, nil
+}

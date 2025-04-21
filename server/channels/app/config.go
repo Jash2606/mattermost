@@ -241,7 +241,12 @@ func (a *App) GetEnvironmentConfig(filter func(reflect.StructField) bool) map[st
 
 // SaveConfig replaces the active configuration, optionally notifying cluster peers.
 func (a *App) SaveConfig(newCfg *model.Config, sendConfigChangeClusterMessage bool) (*model.Config, *model.Config, *model.AppError) {
-	return a.Srv().platform.SaveConfig(newCfg, sendConfigChangeClusterMessage)
+	oldCfg, newCfg, err := a.Srv().platform.SaveConfig(newCfg, sendConfigChangeClusterMessage)
+	if err == nil && sendConfigChangeClusterMessage {
+        a.BroadcastConfigChange(newCfg)
+    }
+    
+    return oldCfg, newCfg, err
 }
 
 func (a *App) HandleMessageExportConfig(cfg *model.Config, appCfg *model.Config) {
@@ -280,4 +285,18 @@ func (s *Server) MailServiceConfig() *mail.SMTPConfig {
 		ReplyToAddress:                    *emailSettings.ReplyToAddress,
 	}
 	return &cfg
+}
+
+// Add this function to broadcast config changes to all nodes
+func (a *App) BroadcastConfigChange(cfg *model.Config) {
+    if a.Cluster() == nil {
+        return
+    }
+    
+    msg := &model.ClusterMessage{
+        Event:    model.ClusterEventConfigChanged,
+        SendType: model.ClusterSendReliable,
+    }
+    
+    a.Cluster().SendClusterMessage(msg)
 }

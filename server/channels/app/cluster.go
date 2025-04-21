@@ -18,3 +18,19 @@ func (s *Server) RemoveClusterLeaderChangedListener(id string) {
 func (s *Server) InvokeClusterLeaderChangedListeners() {
 	s.platform.InvokeClusterLeaderChangedListeners()
 }
+
+func (s *Server) initCluster() {
+    // Create Redis connection details from config
+    redisSettings := s.Config().RedisSettings
+    redisAddress := redisSettings.Address
+    redisPassword := redisSettings.Password
+    
+    // Initialize our open-source cluster implementation
+    s.platform.cluster = einterfaces.NewOpenSourceCluster(redisAddress, redisPassword)
+    
+    // Start internode communication
+    s.platform.cluster.StartInterNodeCommunication()
+    
+    // Register cluster message handlers
+    s.registerClusterHandlers()
+}
